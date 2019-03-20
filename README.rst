@@ -43,12 +43,6 @@ or
 $ pip install .
 
 
-Install from zipped package:
-----------------------------
-
-$ pip install msread-#.#.#.tar.gz
-
-
 Reading Thermo Raw files:
 -------------------------
 
