@@ -1,0 +1,4 @@
+# Include info files
+
+include README.rst
+include LICENSE.txt
