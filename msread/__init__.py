@@ -2,7 +2,7 @@
 #  Copyright (c) 2010-2019 Martin Strohalm. All rights reserved.
 
 # set version
-version = (0, 4, 0)
+version = (0, 5, 0)
 
 # import modules
 import os.path
@@ -23,7 +23,7 @@ from .mzdata_reader import MZDataReader
 from .thermo_reader import ThermoReader
 
 
-def open(path, file_format=None):
+def read(path, file_format=None):
     """
     Returns specific file reader for given file type.
     

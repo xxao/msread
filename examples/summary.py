@@ -9,7 +9,7 @@ path = r"sample.raw"
 import msread
 
 # open file
-with msread.open(path) as reader:
+with msread.read(path) as reader:
     
     # show summary
     reader.summary(show=True)

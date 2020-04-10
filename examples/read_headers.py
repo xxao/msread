@@ -7,7 +7,7 @@ import msread
 path = r"sample.raw"
 
 # init reader
-with msread.open(path) as reader:
+with msread.read(path) as reader:
     
     # read headers in RT range
     for header in reader.headers(min_rt=2*60, max_rt=3*60, polarity=1):

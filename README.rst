@@ -9,7 +9,7 @@ formats including: mzData, mzXML, mzML, MGF, ASCII XY and Thermo Raw files.
     import msread
     
     # open file
-    with msread.open("myfile.mzML") as reader:
+    with msread.read("myfile.mzML") as reader:
         
         # show summary
         reader.summary(show=True)
