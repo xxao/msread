@@ -2,10 +2,6 @@
 
 from setuptools import setup, find_packages
 
-# get version
-from msread import version
-version = '.'.join(str(x) for x in version)
-
 # include additional files
 package_data = {}
 
@@ -21,7 +17,7 @@ classifiers = [
 # main setup
 setup(
     name = 'msread',
-    version = version,
+    version = "0.5.1",
     description = 'Mass spectrometry data reading library',
     url = 'https://github.com/xxao/msread',
     author = 'Martin Strohalm',
