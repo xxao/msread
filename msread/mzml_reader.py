@@ -1,5 +1,5 @@
 #  Created by Martin Strohalm
-#  Copyright (c) 2010-2019 Martin Strohalm. All rights reserved.
+#  Copyright (c) Martin Strohalm. All rights reserved.
 
 # import modules
 import base64
@@ -29,7 +29,7 @@ class MZMLReader(MSReader):
                 Path of the spectrum file to be read.
         """
         
-        super(MZMLReader, self).__init__(path)
+        super().__init__(path)
         
         # init buffers
         self._instrument_configs = {}
@@ -62,8 +62,8 @@ class MZMLReader(MSReader):
             
             polarity: int or None
                 Polarity mode.
-                    1 - positive mode
-                    -1 - negative mode
+                    msread.POSITIVE - positive mode
+                    msread.NEGATIVE - negative mode
         
         Yields:
             msread.ScanHeader
@@ -98,7 +98,7 @@ class MZMLReader(MSReader):
                 yield self._make_header(scan_data)
     
     
-    def scans(self, min_rt=None, max_rt=None, ms_level=None, polarity=None, data_type='centroided', **kwargs):
+    def scans(self, min_rt=None, max_rt=None, ms_level=None, polarity=None, data_type=CENTROIDS, **kwargs):
         """
         Iterates through all available scans within document.
         
@@ -117,14 +117,14 @@ class MZMLReader(MSReader):
             
             polarity: int or None
                 Polarity mode.
-                    1 - positive mode
-                    -1 - negative mode
+                    msread.POSITIVE - positive mode
+                    msread.NEGATIVE - negative mode
             
             data_type: str
                 Specifies how data points should be handled if this value is not
                 available from the file.
-                    centroided - points will be handled as centroids
-                    profile - points will be handled as profile
+                    msread.CENTROIDS - points will be handled as centroids
+                    msread.PROFILE - points will be handled as profile
         
         Yields:
             msread.Scan
@@ -162,7 +162,7 @@ class MZMLReader(MSReader):
                 yield self._make_scan(scan_data, data_type)
     
     
-    def scan(self, scan_number, data_type='centroided', **kwargs):
+    def scan(self, scan_number, data_type=CENTROIDS, **kwargs):
         """
         Retrieves specified scan from document.
         
@@ -176,8 +176,8 @@ class MZMLReader(MSReader):
             data_type: str
                 Specifies how data points should be handled if this value is not
                 available from the file.
-                    centroided - points will be handled as centroids
-                    profile - points will be handled as profile
+                    msread.CENTROIDS - points will be handled as centroids
+                    msread.PROFILE - points will be handled as profile
         
         Returns:
             msread.Scan
@@ -226,6 +226,7 @@ class MZMLReader(MSReader):
             'spectrum_type': None,
             'mass_analyzer': None,
             'ionization_source': None,
+            'resolution': None,
             'points_count': None,
             'polarity': None,
             'retention_time': None,
@@ -248,6 +249,9 @@ class MZMLReader(MSReader):
             'int_data': None,
             'int_precision': None,
             'int_compression': None,
+            'sn_data': None,
+            'sn_precision': None,
+            'sn_compression': None,
             'precursor_target_mz': None,
             'precursor_lower_offset': None,
             'precursor_upper_offset': None,
@@ -282,6 +286,9 @@ class MZMLReader(MSReader):
         del header_data['int_data']
         del header_data['int_precision']
         del header_data['int_compression']
+        del header_data['sn_data']
+        del header_data['sn_precision']
+        del header_data['sn_compression']
         del header_data['precursor_target_mz']
         del header_data['precursor_lower_offset']
         del header_data['precursor_upper_offset']
@@ -305,20 +312,20 @@ class MZMLReader(MSReader):
             data_type = scan_data['spectrum_type']
         
         # parse data as centroids
-        if data_type == 'centroided':
+        if data_type == CENTROIDS:
             buff = []
             for point in points:
-                buff.append(Centroid(mz=point[0], ai=point[1]))
-            centroids = Masslist(buff)
-            scan = Scan(centroids=centroids, header=header)
+                noise = point[1] / point[2] if point[2] else None
+                buff.append(Centroid(mz=point[0], ai=point[1], noise=noise))
+            scan = Scan(centroids=buff, header=header)
         
         # parse data as profile
-        elif data_type == 'profile':
+        elif data_type == PROFILE:
             scan = Scan(profile=points, header=header)
         
         # unknown data type
         else:
-            message = "Unknown data type specified! --> '%s'" % data_type
+            message = "Unknown data type specified! -> '%s'" % data_type
             raise ValueError(message)
         
         return scan
@@ -369,6 +376,7 @@ class MZMLReader(MSReader):
             if attr and attr in self._instrument_configs:
                 scan_data['ionization_source'] = self._instrument_configs[attr]['ionization_source']
                 scan_data['mass_analyzer'] = self._instrument_configs[attr]['mass_analyzer']
+                scan_data['resolution'] = self._instrument_configs[attr]['resolution']
             
             # retrieve cv params
             for cvParam_elm in scan_elm.iter(self._prefix+'cvParam'):
@@ -430,6 +438,12 @@ class MZMLReader(MSReader):
                 scan_data['int_data'] = binary_data
                 scan_data['int_precision'] = precision
                 scan_data['int_compression'] = compression
+            
+            # store s/n array
+            elif array_type == 'sn_array':
+                scan_data['sn_data'] = binary_data
+                scan_data['sn_precision'] = precision
+                scan_data['sn_compression'] = compression
     
     
     def _retrieve_instrument_configurations(self, instrumentConfigurationList_elm):
@@ -445,7 +459,8 @@ class MZMLReader(MSReader):
             # init buffer
             self._instrument_configs[config_id] = {
                 'ionization_source': None,
-                'mass_analyzer': None}
+                'mass_analyzer': None,
+                'resolution': None}
             
             # retrieve all cv params
             for cvParam_elm in instrumentConfiguration_elm.iter(self._prefix+'cvParam'):
@@ -494,17 +509,21 @@ class MZMLReader(MSReader):
             # intensity array
             elif accession == 'MS:1000515':
                 return 'array_type', 'int_array'
+            
+            # s/n array
+            elif accession == 'MS:1000517':
+                return 'array_type', 'sn_array'
         
         # spectrum data
         if not context or context == 'spectrum':
             
             # centroid spectrum
             if accession == 'MS:1000127':
-                return 'spectrum_type', 'centroided'
+                return 'spectrum_type', CENTROIDS
             
             # profile spectrum
             if accession == 'MS:1000128':
-                return 'spectrum_type', 'profile'
+                return 'spectrum_type', PROFILE
             
             # ms level
             if accession == 'MS:1000511' and value:
@@ -512,11 +531,11 @@ class MZMLReader(MSReader):
             
             # positive scan
             if accession == 'MS:1000130':
-                return 'polarity', 1
+                return 'polarity', POSITIVE
             
             # negative scan
             if accession == 'MS:1000129':
-                return 'polarity', -1
+                return 'polarity', NEGATIVE
             
             # total ion current
             if accession == 'MS:1000285' and value:
@@ -549,6 +568,18 @@ class MZMLReader(MSReader):
             # scan start time (no units)
             if accession == 'MS:1000016' and value:
                 return 'retention_time', float(value)*60
+            
+            # resolution
+            if accession == 'MS:1000800' and value:
+                return 'resolution', int(value)
+            
+            # scan filter
+            if accession == 'MS:1000512' and value:
+                return 'scan_filter', value
+            
+            # injection time (in milliseconds)
+            if accession == 'MS:1000927' and value and unit_accession == 'UO:0000028':
+                return 'injection_time', float(value)
         
         # precursor data
         if not context or context == 'precursor':
@@ -597,6 +628,9 @@ class MZMLReader(MSReader):
             if accession == 'MS:1000509' and value and unit_accession == 'UO:0000266':
                 return 'activation_energy', float(value)
             
+            if accession == 'MS:1000045' and value and unit_accession == 'UO:0000266':
+                return 'activation_energy', float(value)
+            
             # collision induced dissociation
             if accession == 'MS:1000133':
                 return 'dissociation_method', 'CID'
@@ -639,6 +673,10 @@ class MZMLReader(MSReader):
         
         # instrument data
         if not context or context == 'instrument':
+            
+            # resolution
+            if accession == 'MS:1000028' and value:
+                return 'resolution', int(value)
             
             # chemical ionization
             if accession == 'MS:1000071':
@@ -708,7 +746,7 @@ class MZMLReader(MSReader):
             if accession == 'MS:1000484':
                 return 'mass_analyzer', 'Orbitrap'
         
-        return (None, None)
+        return None, None
     
     
     def _parse_scan_number(self, string):
@@ -730,9 +768,13 @@ class MZMLReader(MSReader):
         if not scan_data['mz_data'] or not scan_data['int_data']:
             return []
         
+        if not scan_data['sn_data']:
+            scan_data['sn_data'] = ""
+        
         # decode data
         mz_data = base64.b64decode(scan_data['mz_data'])
         int_data = base64.b64decode(scan_data['int_data'])
+        sn_data = base64.b64decode(scan_data['sn_data'])
         
         # decompress data
         if scan_data['mz_compression'] == 'zlib':
@@ -740,6 +782,9 @@ class MZMLReader(MSReader):
         
         if scan_data['int_compression'] == 'zlib':
             int_data = zlib.decompress(int_data)
+        
+        if scan_data['sn_compression'] == 'zlib':
+            sn_data = zlib.decompress(sn_data)
         
         # get precision
         mz_precision = 'f'
@@ -750,16 +795,24 @@ class MZMLReader(MSReader):
         if scan_data['int_precision'] == 64:
             int_precision = 'd'
         
+        sn_precision = 'f'
+        if scan_data['sn_precision'] == 64:
+            sn_precision = 'd'
+        
         # convert from binary
-        count = len(mz_data) // struct.calcsize('<' + mz_precision)
+        count = int(len(mz_data) / struct.calcsize('<' + mz_precision))
         mz_data = struct.unpack('<' + mz_precision * count, mz_data[0:len(mz_data)])
         
-        count = len(int_data) // struct.calcsize('<' + int_precision)
+        count = int(len(int_data) / struct.calcsize('<' + int_precision))
         int_data = struct.unpack('<' + int_precision * count, int_data[0:len(int_data)])
         
+        count = int(len(sn_data) / struct.calcsize('<' + sn_precision))
+        sn_data = struct.unpack('<' + sn_precision * count, sn_data[0:len(sn_data)])
+        
         # format
-        if scan_data['spectrum_type'] == 'centroided':
-            points = map(list, zip(mz_data, int_data))
+        if scan_data['spectrum_type'] == CENTROIDS:
+            data = zip(mz_data, int_data, sn_data) if sn_data else zip(mz_data, int_data, [0]*len(mz_data))
+            points = list(map(list, data))
         else:
             mz_data = numpy.array(mz_data)
             mz_data.shape = (-1, 1)
