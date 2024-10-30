@@ -1,5 +1,5 @@
 #  Created by Martin Strohalm
-#  Copyright (c) 2010-2019 Martin Strohalm. All rights reserved.
+#  Copyright (c) Martin Strohalm. All rights reserved.
 
 # import modules
 import re
@@ -16,15 +16,18 @@ except ImportError:
 from .ms_reader import *
 
 # compile basic patterns
-SCAN_FILTER_POLARITY_PATTERN = re.compile('^(?P<analyzer>\S+) (?P<polarity>\+|\-)')
+SCAN_FILTER_POLARITY_PATTERN = re.compile('^(?P<analyzer>\w+ )?((?P<polarity>\+|\-) )(?P<profile>\w )?(?P<source>\w+ )(?P<dda>\w )?')
 SCAN_FILTER_DISSOCIATION_PATTERN = re.compile('(([0-9\.]+)@([a-z]+)([0-9\.]+))')
+STEPPED_ENERGIES = re.compile('(?P<activation>\w+) Collision Energies \(%\) = (?P<values>[\d,]+)')
 
 # set enums
-ANALYZERS = ('ITMS','TQMS','SQMS','TOFMS','FTMS','Sector')
-DISSOCIATION_METHODS = ('CID','MPD','ECD','PQD', 'ETD','HCD','Any','SA','PTR','NETD','NPTR')
+ANALYZERS = ('ITMS', 'TQMS', 'SQMS', 'TOFMS', 'FTMS', 'Sector')
+DISSOCIATION_METHODS = ('CID', 'MPD', 'ECD', 'PQD', 'ETD', 'HCD', 'Any', 'SA', 'PTR', 'NETD', 'NPTR', 'Unknown')
 
 # define constants
 OLD_BASE = False
+VALIDATE_MS_LEVEL = True
+FOLLOW_PRECURSOR = True
 
 
 class ThermoReader(MSReader):
@@ -46,7 +49,7 @@ class ThermoReader(MSReader):
                 Path of the spectrum file to be read.
         """
         
-        super(ThermoReader, self).__init__(path)
+        super().__init__(path)
         
         # init raw file reader
         comtypes.CoInitialize()
@@ -54,6 +57,10 @@ class ThermoReader(MSReader):
         
         # set open flag
         self._is_opened = False
+        
+        # init buffs
+        self._master_scan_numbers = {}
+        self._inst_methods = None
     
     
     def open(self):
@@ -62,7 +69,7 @@ class ThermoReader(MSReader):
         
         Returns:
             state: bool
-                Returns True the file is newly opened. False if the file was
+                Returns True if the file is newly opened. False if the file was
                 already open.
         """
         
@@ -102,8 +109,8 @@ class ThermoReader(MSReader):
             
             polarity: int or None
                 Polarity mode.
-                    1 - positive mode
-                    -1 - negative mode
+                    msread.POSITIVE - positive mode
+                    msread.NEGATIVE - negative mode
         
         Yields:
             msread.ScanHeader
@@ -161,12 +168,12 @@ class ThermoReader(MSReader):
             
             polarity: int or None
                 Polarity mode.
-                    1 - positive mode
-                    -1 - negative mode
+                    msread.POSITIVE - positive mode
+                    msread.NEGATIVE - negative mode
             
             profile: bool
                 If set to True the profile data are retrieved (if available).
-                Otherwise only centroids are retrieved.
+                Otherwise, only centroids are retrieved.
         
         Yields:
             msread.Scan
@@ -221,7 +228,7 @@ class ThermoReader(MSReader):
             
             profile: bool
                 If set to True the profile data are retrieved (if available).
-                Otherwise only centroids are retrieved.
+                Otherwise, only centroids are retrieved.
         
         Returns:
             msread.Scan
@@ -268,6 +275,8 @@ class ThermoReader(MSReader):
             'instrument_model': None,
             'ms_level': None,
             'mass_analyzer': None,
+            'ionization_source': 'ESI',
+            'resolution': None,
             'points_count': None,
             'polarity': None,
             'retention_time': None,
@@ -284,7 +293,6 @@ class ThermoReader(MSReader):
             'dissociation_method': None,
             'activation_energy': None,
             'activation_energies': None,
-            'resolution': None,
             
             'scan_filter': None,
             'isolation_width': None,
@@ -294,6 +302,7 @@ class ThermoReader(MSReader):
             
             'extra_values': {},
             'status_log': {},
+            'instrument_methods': [],
         }
     
     
@@ -323,6 +332,7 @@ class ThermoReader(MSReader):
         del header_data['centroids']
         del header_data['extra_values']
         del header_data['status_log']
+        del header_data['instrument_methods']
         
         # make header
         header = ScanHeader(header_data)
@@ -332,6 +342,7 @@ class ThermoReader(MSReader):
         header.custom_data['scan_filter'] = scan_data['scan_filter']
         header.custom_data['extra_values'] = scan_data['extra_values']
         header.custom_data['status_log'] = scan_data['status_log']
+        header.custom_data['instrument_methods'] = scan_data['instrument_methods']
         
         return header
     
@@ -371,6 +382,11 @@ class ThermoReader(MSReader):
     
     def _retrieve_header_data(self, scan_data, scan_number):
         """Retrieves scan header data."""
+        
+        # retrieve instrument methods
+        if self._inst_methods is None:
+            self._retrieve_instrument_methods()
+            scan_data['instrument_methods'] = self._inst_methods
         
         # retrieve instrument name
         instrument_name = self._retrieve_instrument_name()
@@ -509,7 +525,7 @@ class ThermoReader(MSReader):
         tic_d = ctypes.c_double()
         base_peak_mass_d = ctypes.c_double()
         base_peak_intensity_d = ctypes.c_double()
-        num_chanels_l = ctypes.c_long()
+        num_channels_l = ctypes.c_long()
         uniform_time_l = ctypes.c_long()
         frequency_d = ctypes.c_double()
         
@@ -523,7 +539,7 @@ class ThermoReader(MSReader):
                 tic_d,
                 base_peak_mass_d,
                 base_peak_intensity_d,
-                num_chanels_l,
+                num_channels_l,
                 uniform_time_l,
                 frequency_d)
         
@@ -542,6 +558,7 @@ class ThermoReader(MSReader):
         
         # get scan info
         ms_level = scan_data['ms_level']
+        master_ms_level = ms_level - 1
         scan_number = scan_data['scan_number']
         precursor_mz = scan_data['precursor_mz']
         
@@ -549,65 +566,118 @@ class ThermoReader(MSReader):
         if ms_level < 2:
             return
         
-        # try to get master scan number
-        master_scan_number_v = comtypes.automation.VARIANT()
-        if not self._raw_reader.GetTrailerExtraValueForScanNum(scan_number, 'Master Scan Number:', master_scan_number_v):
-            if master_scan_number_v.value > 0:
-                scan_data['parent_scan_number'] = int(master_scan_number_v.value)
-                return
+        # try trailer
+        master_scan_number = self._retrieve_parent_scan_number_by_trailer(scan_number, master_ms_level)
         
-        # get event indices
-        event_index = self._retrieve_scan_event_index(scan_number)
-        master_event_index = self._retrieve_master_scan_event_index(scan_number)
-        
-        # use nearest MS1 (for MSn=2)
-        if not master_event_index:
+        # try event index
+        if master_scan_number is None:
             
-            current_scan = scan_number -1
-            while current_scan:
-                
-                # check ms level
-                if self._retrieve_ms_level(current_scan) != 1:
-                    current_scan -= 1
-                    continue
+            event_index = self._retrieve_scan_event_index(scan_number)
+            master_event_index = self._retrieve_master_scan_event_index(scan_number)
+            
+            if event_index and master_event_index:
+                master_scan_number = self._retrieve_parent_scan_number_by_event_index(scan_number, master_event_index, precursor_mz)
+        
+        # try nearest MSn-1
+        if master_scan_number is None:
+            master_scan_number = self._retrieve_parent_scan_number_by_ms_level(scan_number, master_scan_number, precursor_mz)
+        
+        # set master scan number
+        scan_data['parent_scan_number'] = master_scan_number
+        self._master_scan_numbers[scan_number] = master_scan_number
+    
+    
+    def _retrieve_parent_scan_number_by_trailer(self, scan_number, ms_level):
+        """Retrieves parent scan number using trailer."""
+        
+        # try cache
+        if scan_number in self._master_scan_numbers:
+            return self._master_scan_numbers[scan_number]
+        
+        # try to get master scan number from trailer
+        master_scan_number_v = comtypes.automation.VARIANT()
+        if self._raw_reader.GetTrailerExtraValueForScanNum(scan_number, 'Master Scan Number:', master_scan_number_v):
+            return None
+        
+        # get value
+        master_scan_number = int(master_scan_number_v.value)
+        if master_scan_number <= 0:
+            return None
+        
+        # check MS level
+        master_ms_level = self._retrieve_ms_level(master_scan_number)
+        if master_ms_level and master_ms_level == ms_level:
+            return master_scan_number
+        
+        # check flags
+        if not VALIDATE_MS_LEVEL:
+            return master_scan_number
+        
+        if not FOLLOW_PRECURSOR:
+            return None
+        
+        # follow precursor until MS level is correct
+        return self._retrieve_parent_scan_number_by_trailer(master_scan_number, ms_level)
+    
+    
+    def _retrieve_parent_scan_number_by_event_index(self, scan_number, event_index, precursor_mz):
+        """Retrieves parent scan number by master scan event index."""
+        
+        # try cache
+        if scan_number in self._master_scan_numbers:
+            return self._master_scan_numbers[scan_number]
+        
+        # use nearest higher MSn having corresponding event index (for MSn>2)
+        lowest_reached = False
+        current_scan = scan_number - 1
+        
+        while current_scan:
+            
+            # get current scan event index
+            current_event_index = self._retrieve_scan_event_index(current_scan)
+            
+            # check for lowest event index
+            if lowest_reached and current_event_index > 1:
+                return None
+            
+            # requested event found
+            if current_event_index == event_index:
                 
                 # get mass range
                 low_mz, high_mz = self._retrieve_mass_range(current_scan)
                 
                 # check mass range
                 if not precursor_mz or (low_mz <= precursor_mz <= high_mz):
-                    scan_data['parent_scan_number'] = current_scan
-                    return
+                    return current_scan
             
-                current_scan -= 1
+            lowest_reached = current_event_index <= 1
+            current_scan -= 1
+    
+    
+    def _retrieve_parent_scan_number_by_ms_level(self, scan_number, ms_level, precursor_mz):
+        """Retrieves parent scan number by nearest master MS level."""
         
-        # use nearest higher MSn having corresponding event index (for MSn>2)
-        elif event_index and master_event_index:
+        # try cache
+        if scan_number in self._master_scan_numbers:
+            return self._master_scan_numbers[scan_number]
+        
+        # use nearest MS1 (for MSn=2)
+        current_scan = scan_number - 1
+        while current_scan:
             
-            lowest_reached = False
-            current_scan = scan_number -1
-            while current_scan:
-                
-                # get current scan event index
-                current_event_index = self._retrieve_scan_event_index(current_scan)
-                
-                # check for lowest event index
-                if lowest_reached and current_event_index > 1:
-                    return
-                
-                # requested event found
-                if current_event_index == master_event_index:
-                    
-                    # get mass range
-                    low_mz, high_mz = self._retrieve_mass_range(current_scan)
-                    
-                    # check mass range
-                    if not precursor_mz or (low_mz <= precursor_mz <= high_mz):
-                        scan_data['parent_scan_number'] = current_scan
-                        return
-                
-                lowest_reached = current_event_index <= 1
+            # check ms level
+            if self._retrieve_ms_level(current_scan) != ms_level:
                 current_scan -= 1
+                continue
+            
+            # get mass range
+            low_mz, high_mz = self._retrieve_mass_range(current_scan)
+            
+            # check mass range
+            if not precursor_mz or (low_mz <= precursor_mz <= high_mz):
+                return current_scan
+            
+            current_scan -= 1
     
     
     def _retrieve_profile(self, scan_number):
@@ -813,9 +883,9 @@ class ThermoReader(MSReader):
         
         # get polarity value
         if match.group('polarity') == '+':
-            return 1
+            return POSITIVE
         elif match.group('polarity') == '-':
-            return -1
+            return NEGATIVE
         
         return None
     
@@ -824,7 +894,7 @@ class ThermoReader(MSReader):
         """Retrieves resolution value."""
         
         # get value from trailer
-        for label in ('FT Resolution:', 'Orbitrap Resolution:'):
+        for label in ('FT Resolution:', 'Orbitrap Resolution:', 'FT Resolution'):
             
             resolution_v = comtypes.automation.VARIANT()
             if not self._raw_reader.GetTrailerExtraValueForScanNum(scan_number, label, resolution_v):
@@ -908,15 +978,16 @@ class ThermoReader(MSReader):
         first_precursor_mass_d = ctypes.c_double()
         last_precursor_mass_d = ctypes.c_double()
         valid_l = ctypes.c_long()
+        
         if not self._raw_reader.GetPrecursorRangeForScanNum(scan_number, ms_level, first_precursor_mass_d, last_precursor_mass_d, valid_l):
             if valid_l.value:
-                return (float(first_precursor_mass_d.value), float(last_precursor_mass_d.value))
+                return float(first_precursor_mass_d.value), float(last_precursor_mass_d.value)
         
         return None
     
     
     def _retrieve_isolation_width(self, scan_number, ms_level):
-        """"Retrieves precursor isolation width value."""
+        """Retrieves precursor isolation width value."""
         
         # get value from trailer
         label = "MS%d Isolation Width:" % ms_level
@@ -954,20 +1025,30 @@ class ThermoReader(MSReader):
     def _retrieve_activation_energies(self, scan_number, method):
         """"Retrieves activation energies values."""
         
-        # get all step energies
+        # get all step energies from trailer
         label = "%s Energy:" % method
         activation_energies_v = comtypes.automation.VARIANT()
-        if not self._raw_reader.GetTrailerExtraValueForScanNum(scan_number, label, activation_energies_v):
-            
-            if not activation_energies_v.value:
-                return None
-            
-            if "," in str(activation_energies_v.value):
-                return tuple(float(x) for x in activation_energies_v.value.split(","))
-            else:
-                return float(activation_energies_v.value)
+        if self._raw_reader.GetTrailerExtraValueForScanNum(scan_number, label, activation_energies_v):
+            return None
         
-        return None
+        # check values
+        raw_value = activation_energies_v.value
+        if not raw_value:
+            return None
+        
+        # check if instrument method needed
+        if '...' in raw_value and self._inst_methods:
+            for match in STEPPED_ENERGIES.findall(self._inst_methods[0]):
+                if match[0] == method:
+                    raw_value = match[1]
+                    break
+        
+        # split and parse values
+        values = raw_value.split(",")
+        try:
+            return tuple(float(x) for x in values)
+        except ValueError:
+            return None
     
     
     def _retrieve_scan_event_index(self, scan_number):
@@ -990,6 +1071,28 @@ class ThermoReader(MSReader):
             return int(index_v.value)
         
         return None
+    
+    
+    def _retrieve_instrument_methods(self):
+        """Retrieves instrument method values."""
+        
+        self._inst_methods = []
+        
+        # get methods count
+        channels_l = ctypes.c_long()
+        if self._raw_reader.GetNumInstMethods(channels_l):
+            return
+        
+        # retrieve methods
+        for channel in range(channels_l.value):
+            
+            # get data
+            method_s = comtypes.BSTR()
+            if self._raw_reader.GetInstMethod(channel, method_s):
+                continue
+            
+            # store
+            self._inst_methods.append(method_s.value)
     
     
     def _retrieve_extra_values(self, scan_data):
