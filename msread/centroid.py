@@ -1,5 +1,5 @@
 #  Created by Martin Strohalm
-#  Copyright (c) 2010-2019 Martin Strohalm. All rights reserved.
+#  Copyright (c) Martin Strohalm. All rights reserved.
 
 
 class Centroid(object):
@@ -76,8 +76,6 @@ class Centroid(object):
                 Arbitrary custom data.
         """
         
-        super(Centroid, self).__init__()
-        
         self.mz = float(mz)
         self.ai = float(ai)
         self.base = float(base)
@@ -133,6 +131,12 @@ class Centroid(object):
             and self.area == other.area
             and self.fwhm == other.fwhm
             and self.charge == other.charge)
+    
+    
+    def __ne__(self, other):
+        """Not equal operator."""
+        
+        return not self.__eq__(other)
     
     
     @property

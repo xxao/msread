@@ -1,5 +1,5 @@
 #  Created by Martin Strohalm
-#  Copyright (c) 2010-2018 Martin Strohalm. All rights reserved.
+#  Copyright (c) Martin Strohalm. All rights reserved.
 
 # import modules
 import numpy
@@ -40,8 +40,6 @@ class Scan(object):
             header: msread.ScanHeader or None
                 Spectrum metadata.
         """
-        
-        super(Scan, self).__init__()
         
         # check profile
         profile = profile if profile is not None else []

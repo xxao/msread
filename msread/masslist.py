@@ -1,5 +1,5 @@
 #  Created by Martin Strohalm
-#  Copyright (c) 2010-2019 Martin Strohalm. All rights reserved.
+#  Copyright (c) Martin Strohalm. All rights reserved.
 
 # import modules
 from .centroid import Centroid
@@ -21,8 +21,6 @@ class Masslist(object):
             centroids: (msread.Centroid,) or ((float, float),)
                 Collection of mass centroids.
         """
-        
-        super(Masslist, self).__init__()
         
         self._centroids = []
         
@@ -65,6 +63,12 @@ class Masslist(object):
                 return False
         
         return True
+    
+    
+    def __ne__(self, other):
+        """Not equal operator."""
+        
+        return not self.__eq__(other)
     
     
     def __len__(self):
@@ -125,7 +129,10 @@ class Masslist(object):
                 The basepeak centroid.
         """
         
-        return max(self._centroids, key=lambda x: x.intensity)
+        if not self._centroids:
+            return None
+        
+        return max(self._centroids, key=lambda c: c.intensity)
     
     
     def tic(self):
@@ -150,10 +157,7 @@ class Masslist(object):
                 Clone of current masslist.
         """
         
-        centroids = []
-        for centroid in self._centroids:
-            centroids.append(centroid.clone())
-        
+        centroids = [c.clone() for c in self._centroids]
         return Masslist(centroids)
     
     
@@ -163,9 +167,9 @@ class Masslist(object):
         if isinstance(item, Centroid):
             return item
         
-        elif type(item) in (list, tuple) and len(item)==2:
+        elif type(item) in (list, tuple) and len(item) == 2:
             return Centroid(mz=float(item[0]), ai=float(item[1]))
         
         else:
-            message = "Each mass centroid must be of type msread.Centroid or list/tuple of two floats! --> '%s'" % type(item)
+            message = "Each mass centroid must be of type msread.Centroid or list/tuple of two floats! -> '%s'" % type(item)
             raise TypeError(message)

@@ -6,8 +6,6 @@ import msread
 # init path
 path = r"sample.raw"
 
-import msread
-
 # open file
 with msread.read(path) as reader:
     

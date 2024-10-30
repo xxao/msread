@@ -1,5 +1,5 @@
 #  Created by Martin Strohalm
-#  Copyright (c) 2010-2019 Martin Strohalm. All rights reserved.
+#  Copyright (c) Martin Strohalm. All rights reserved.
 
 
 class ScanHeader(object):
@@ -27,13 +27,12 @@ class ScanHeader(object):
             MS level (order).
         
         polarity: int or None
-            Spectrum polarity. Setting to 1 means positive polarity, setting to
-            -1 means negative polarity.
+            Spectrum polarity as msread.POSITIVE or msread.NEGATIVE.
         
         spectrum_type: str or None
             Type of spectrum data points.
-                centroided - centroided spectrum
-                profile - profile spectrum
+                msread.CENTROIDS - centroided spectrum
+                msread.PROFILE - profile spectrum
         
         mass_analyzer: str or None
             Type of mass analyzer used.
@@ -97,8 +96,6 @@ class ScanHeader(object):
     def __init__(self, attributes={}, **attrs):
         """Initializes a new instance of msread.ScanHeader."""
         
-        super(ScanHeader, self).__init__()
-        
         self.scan_number = None
         self.parent_scan_number = None
         
@@ -140,7 +137,7 @@ class ScanHeader(object):
             if hasattr(self, name):
                 setattr(self, name, value)
             else:
-                message = "ScanHeader attribute not found! --> '%s'" % name
+                message = "ScanHeader attribute not found! -> '%s'" % name
                 raise AttributeError(message)
     
     
@@ -163,7 +160,10 @@ class ScanHeader(object):
             
         if self.retention_time is not None:
             label += " RT:%.3f min" % (self.retention_time / 60)
-            
+        
+        if self.resolution is not None:
+            label += " R:%d" % self.resolution
+        
         if self.dissociation_method is not None:
             label += " %s" % self.dissociation_method
             
@@ -180,6 +180,12 @@ class ScanHeader(object):
                 label += " [%.6f-%.6f]" % (self.precursor_low_mz, self.precursor_high_mz)
             
         return label
+    
+    
+    def __ne__(self, other):
+        """Not equal operator."""
+        
+        return not self.__eq__(other)
     
     
     def __repr__(self):
