@@ -1,5 +1,5 @@
 #  Created by Martin Strohalm
-#  Copyright (c) 2010-2019 Martin Strohalm. All rights reserved.
+#  Copyright (c) Martin Strohalm. All rights reserved.
 
 # import modules
 import re
@@ -28,7 +28,7 @@ class MGFReader(MSReader):
                 Path of the spectrum file to be read.
         """
         
-        super(MGFReader, self).__init__(path)
+        super().__init__(path)
     
     
     def headers(self, **kwargs):
@@ -72,7 +72,7 @@ class MGFReader(MSReader):
                 self._parse_header(line, scan_data)
     
     
-    def scans(self, data_type='centroided', **kwargs):
+    def scans(self, data_type=CENTROIDS, **kwargs):
         """
         Iterates through all available scans within document.
         
@@ -80,8 +80,8 @@ class MGFReader(MSReader):
             data_type: str
                 Specifies how data points should be handled if this value is not
                 available from the file.
-                    centroided - points will be handled as centroids
-                    profile - points will be handled as profile
+                    msread.CENTROIDS - points will be handled as centroids
+                    msread.PROFILE - points will be handled as profile
         
         Yields:
             msread.Scan
@@ -123,7 +123,7 @@ class MGFReader(MSReader):
                 self._parse_point(line, scan_data)
     
     
-    def scan(self, scan_number, data_type='centroided', **kwargs):
+    def scan(self, scan_number, data_type=CENTROIDS, **kwargs):
         """
         Retrieves specified scan from document.
         
@@ -137,8 +137,8 @@ class MGFReader(MSReader):
             data_type: str
                 Specifies how data points should be handled if this value is not
                 available from the file.
-                    centroided - points will be handled as centroids
-                    profile - points will be handled as profile
+                    msread.CENTROIDS - points will be handled as centroids
+                    msread.PROFILE - points will be handled as profile
         
         Returns:
             msread.Scan
@@ -216,20 +216,19 @@ class MGFReader(MSReader):
         header = self._make_header(scan_data)
         
         # handle data as centroids
-        if data_type == 'centroided':
+        if data_type == CENTROIDS:
             buff = []
             for point in scan_data['data']:
                 buff.append(Centroid(mz=point[0], ai=point[1]))
-            centroids = Masslist(buff)
-            scan = Scan(centroids=centroids, header=header)
+            scan = Scan(centroids=buff, header=header)
         
         # handle data as profile
-        elif data_type == 'profile':
+        elif data_type == PROFILE:
             scan = Scan(profile=scan_data['data'], header=header)
         
         # unknown data type
         else:
-            message = "Unknown data type specified! --> %s" % data_type
+            message = "Unknown data type specified! -> %s" % data_type
             raise ValueError(message)
         
         return scan
@@ -276,7 +275,7 @@ class MGFReader(MSReader):
             return
         
         # init point
-        point = [0,100.]
+        point = [0, 100.]
         point[0] = float(parts.group(1).strip())
         
         # try to get intensity if available

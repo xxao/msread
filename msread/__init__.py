@@ -1,5 +1,5 @@
 #  Created by Martin Strohalm
-#  Copyright (c) 2010-2019 Martin Strohalm. All rights reserved.
+#  Copyright (c) Martin Strohalm. All rights reserved.
 
 # set version
 version = (0, 5, 1)
@@ -21,6 +21,7 @@ from .mzml_reader import MZMLReader
 from .mzxml_reader import MZXMLReader
 from .mzdata_reader import MZDataReader
 from .thermo_reader import ThermoReader
+from .constants import *
 
 
 def read(path, file_format=None):
@@ -44,7 +45,7 @@ def read(path, file_format=None):
     
     # check path
     if not os.path.exists(path):
-        message = "File not found! --> '%s'" % path
+        message = "File not found! -> '%s'" % path
         raise IOError(message)
     
     # get format
@@ -71,7 +72,7 @@ def read(path, file_format=None):
         return ThermoReader(path)
     
     # unknown format
-    message = "Unknown file format! --> '%s'" % file_format
+    message = "Unknown file format! -> '%s'" % file_format
     raise ValueError(message)
 
 
@@ -90,7 +91,7 @@ def resolve_format(path):
     
     # check path
     if not os.path.exists(path):
-        message = "File not found! --> " + path
+        message = "File not found! -> " + path
         raise IOError(message)
     
     # get filename and extension

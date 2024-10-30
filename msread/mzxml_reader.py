@@ -1,5 +1,5 @@
 #  Created by Martin Strohalm
-#  Copyright (c) 2010-2019 Martin Strohalm. All rights reserved.
+#  Copyright (c) Martin Strohalm. All rights reserved.
 
 # import modules
 import base64
@@ -30,7 +30,7 @@ class MZXMLReader(MSReader):
                 Path of the spectrum file to be read.
         """
         
-        super(MZXMLReader, self).__init__(path)
+        super().__init__(path)
         
         # init buffers
         self._spectrum_type = None
@@ -64,8 +64,8 @@ class MZXMLReader(MSReader):
             
             polarity: int or None
                 Polarity mode.
-                    1 - positive mode
-                    -1 - negative mode
+                    msread.POSITIVE - positive mode
+                    msread.NEGATIVE - negative mode
         
         Yields:
             msread.ScanHeader
@@ -110,7 +110,7 @@ class MZXMLReader(MSReader):
                 yield self._make_header(scan_data)
     
     
-    def scans(self, min_rt=None, max_rt=None, ms_level=None, polarity=None, data_type='centroided', **kwargs):
+    def scans(self, min_rt=None, max_rt=None, ms_level=None, polarity=None, data_type=CENTROIDS, **kwargs):
         """
         Iterates through all available scans within document.
         
@@ -129,14 +129,14 @@ class MZXMLReader(MSReader):
             
             polarity: int or None
                 Polarity mode.
-                    1 - positive mode
-                    -1 - negative mode
+                    msread.POSITIVE - positive mode
+                    msread.NEGATIVE - negative mode
             
             data_type: str
                 Specifies how data points should be handled if this value is not
                 available from the file.
-                    centroided - points will be handled as centroids
-                    profile - points will be handled as profile
+                    msread.CENTROIDS - points will be handled as centroids
+                    msread.PROFILE - points will be handled as profile
         
         Yields:
             msread.Scan
@@ -184,7 +184,7 @@ class MZXMLReader(MSReader):
                 yield self._make_scan(scan_data, data_type)
     
     
-    def scan(self, scan_number, data_type='centroided', **kwargs):
+    def scan(self, scan_number, data_type=CENTROIDS, **kwargs):
         """
         Retrieves specified scan from document.
         
@@ -198,8 +198,8 @@ class MZXMLReader(MSReader):
             data_type: str
                 Specifies how data points should be handled if this value is not
                 available from the file.
-                    centroided - points will be handled as centroids
-                    profile - points will be handled as profile
+                    msread.CENTROIDS - points will be handled as centroids
+                    msread.PROFILE - points will be handled as profile
         
         Returns:
             msread.Scan
@@ -312,20 +312,19 @@ class MZXMLReader(MSReader):
             data_type = scan_data['spectrum_type']
         
         # parse data as centroids
-        if data_type == 'centroided':
+        if data_type == CENTROIDS:
             buff = []
             for point in points:
                 buff.append(Centroid(mz=point[0], ai=point[1]))
-            centroids = Masslist(buff)
-            scan = Scan(centroids=centroids, header=header)
+            scan = Scan(centroids=buff, header=header)
         
         # parse data as profile
-        elif data_type == 'profile':
+        elif data_type == PROFILE:
             scan = Scan(profile=points, header=header)
         
         # unknown data type
         else:
-            message = "Unknown data type specified! --> '%s'" % data_type
+            message = "Unknown data type specified! -> '%s'" % data_type
             raise ValueError(message)
         
         return scan
@@ -374,9 +373,9 @@ class MZXMLReader(MSReader):
         # retrieve polarity
         attr = scan_elm.get('polarity', None)
         if attr in ('positive', 'Positive', '+'):
-            scan_data['polarity'] = 1
+            scan_data['polarity'] = POSITIVE
         elif attr in ('negative', 'Negative', '-'):
-            scan_data['polarity'] = -1
+            scan_data['polarity'] = NEGATIVE
         
         # retrieve retention time
         attr = scan_elm.get('retentionTime', None)
@@ -455,11 +454,11 @@ class MZXMLReader(MSReader):
         
         self._spectrum_type = None
         
-        attr = dataProcessing_elm.get('centroided', None)
+        attr = dataProcessing_elm.get(CENTROIDS, None)
         if attr and attr == '1':
-            self._spectrum_type = 'centroided'
+            self._spectrum_type = CENTROIDS
         elif attr and attr == '0':
-            self._spectrum_type = 'profile'
+            self._spectrum_type = PROFILE
     
     
     def _parse_retention_time(self, string):
@@ -507,12 +506,12 @@ class MZXMLReader(MSReader):
             data = zlib.decompress(data)
         
         # convert from binary
-        count = len(data) // struct.calcsize(endian + precision)
+        count = int(len(data) / struct.calcsize(endian + precision))
         data = struct.unpack(endian + precision * count, data[0:len(data)])
         
         # format
-        if scan_data['spectrum_type'] == 'centroided':
-            points = map(list, zip(data[::2], data[1::2]))
+        if scan_data['spectrum_type'] == CENTROIDS:
+            points = list(map(list, zip(data[::2], data[1::2])))
         else:
             data = numpy.array(data)
             data.shape = (-1, 2)

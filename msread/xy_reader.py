@@ -1,5 +1,5 @@
 #  Created by Martin Strohalm
-#  Copyright (c) 2010-2019 Martin Strohalm. All rights reserved.
+#  Copyright (c) Martin Strohalm. All rights reserved.
 
 # import modules
 import re
@@ -29,7 +29,7 @@ class XYReader(MSReader):
                 Path of the spectrum file to be read.
         """
         
-        super(XYReader, self).__init__(path)
+        super().__init__(path)
     
     
     def headers(self, **kwargs):
@@ -46,7 +46,7 @@ class XYReader(MSReader):
         yield ScanHeader(scan_number=None)
     
     
-    def scans(self, data_type='centroided', **kwargs):
+    def scans(self, data_type=CENTROIDS, **kwargs):
         """
         Iterates through all available scans within document.
         
@@ -54,8 +54,8 @@ class XYReader(MSReader):
             data_type: str
                 Specifies how data points should be handled if this value is not
                 available from the file.
-                    centroided - points will be handled as centroids
-                    profile - points will be handled as profile
+                    msread.CENTROIDS - points will be handled as centroids
+                    msread.PROFILE - points will be handled as profile
         
         Yields:
             msread.Scan
@@ -68,7 +68,7 @@ class XYReader(MSReader):
         yield self._make_scan(scan_data, data_type)
     
     
-    def scan(self, scan_number=None, data_type='centroided', **kwargs):
+    def scan(self, scan_number=None, data_type=CENTROIDS, **kwargs):
         """
         Retrieves specified scan from document.
         
@@ -82,8 +82,8 @@ class XYReader(MSReader):
             data_type: str
                 Specifies how data points should be handled if this value is not
                 available from the file.
-                    centroided - points will be handled as centroids
-                    profile - points will be handled as profile
+                    msread.CENTROIDS - points will be handled as centroids
+                    msread.PROFILE - points will be handled as profile
         
         Returns:
             msread.Scan
@@ -117,7 +117,7 @@ class XYReader(MSReader):
                 parts = COLUMNS_PATTERN.match(line)
                 if parts:
                     mass = float(parts.group(1))
-                    intensity = float(parts.group(3))
+                    intensity = float(parts.group(3) or 0)
                     data.append([mass, intensity])
                 else:
                     data = []
@@ -133,20 +133,19 @@ class XYReader(MSReader):
         header = ScanHeader(scan_number=0)
         
         # handle data as centroids
-        if data_type == 'centroided':
+        if data_type == CENTROIDS:
             buff = []
             for point in scan_data:
                 buff.append(Centroid(mz=point[0], ai=point[1]))
-            centroids = Masslist(buff)
-            scan = Scan(centroids=centroids, header=header)
+            scan = Scan(centroids=buff, header=header)
         
         # handle data as profile
-        elif data_type == 'profile':
+        elif data_type == PROFILE:
             scan = Scan(profile=scan_data, header=header)
         
         # unknown data type
         else:
-            message = "Unknown data type specified! --> '%s'" % data_type
+            message = "Unknown data type specified! -> '%s'" % data_type
             raise ValueError(message)
         
         return scan

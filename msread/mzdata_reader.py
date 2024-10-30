@@ -1,5 +1,5 @@
 #  Created by Martin Strohalm
-#  Copyright (c) 2010-2019 Martin Strohalm. All rights reserved.
+#  Copyright (c) Martin Strohalm. All rights reserved.
 
 # import modules
 import base64
@@ -28,7 +28,7 @@ class MZDataReader(MSReader):
                 Path of the spectrum file to be read.
         """
         
-        super(MZDataReader, self).__init__(path)
+        super().__init__(path)
         
         # set namespace prefix
         self._prefix = ''
@@ -58,8 +58,8 @@ class MZDataReader(MSReader):
             
             polarity: int or None
                 Polarity mode.
-                    1 - positive mode
-                    -1 - negative mode
+                    msread.POSITIVE - positive mode
+                    msread.NEGATIVE - negative mode
         
         Yields:
             msread.ScanHeader
@@ -90,7 +90,7 @@ class MZDataReader(MSReader):
                 yield self._make_header(scan_data)
     
     
-    def scans(self, min_rt=None, max_rt=None, ms_level=None, polarity=None, data_type='centroided', **kwargs):
+    def scans(self, min_rt=None, max_rt=None, ms_level=None, polarity=None, data_type=CENTROIDS, **kwargs):
         """
         Iterates through all available scans within document.
         
@@ -109,14 +109,14 @@ class MZDataReader(MSReader):
             
             polarity: int or None
                 Polarity mode.
-                    1 - positive mode
-                    -1 - negative mode
+                    msread.POSITIVE - positive mode
+                    msread.NEGATIVE - negative mode
             
             data_type: str
                 Specifies how data points should be handled if this value is not
                 available from the file.
-                    centroided - points will be handled as centroids
-                    profile - points will be handled as profile
+                    msread.CENTROIDS - points will be handled as centroids
+                    msread.PROFILE - points will be handled as profile
         
         Yields:
             msread.Scan
@@ -150,7 +150,7 @@ class MZDataReader(MSReader):
                 yield self._make_scan(scan_data, data_type)
     
     
-    def scan(self, scan_number, data_type='centroided', **kwargs):
+    def scan(self, scan_number, data_type=CENTROIDS, **kwargs):
         """
         Retrieves specified scan from document.
         
@@ -164,8 +164,8 @@ class MZDataReader(MSReader):
             data_type: str
                 Specifies how data points should be handled if this value is not
                 available from the file.
-                    centroided - points will be handled as centroids
-                    profile - points will be handled as profile
+                    msread.CENTROIDS - points will be handled as centroids
+                    msread.PROFILE - points will be handled as profile
         
         Returns:
             msread.Scan
@@ -248,9 +248,7 @@ class MZDataReader(MSReader):
         del header_data['int_precision']
         
         # create header
-        header = ScanHeader(header_data)
-        
-        return header
+        return ScanHeader(header_data)
     
     
     def _make_scan(self, scan_data, data_type):
@@ -267,20 +265,19 @@ class MZDataReader(MSReader):
             data_type = scan_data['spectrum_type']
         
         # parse data as centroids
-        if data_type == 'centroided':
+        if data_type == CENTROIDS:
             buff = []
             for point in points:
                 buff.append(Centroid(mz=point[0], ai=point[1]))
-            centroids = Masslist(buff)
-            scan = Scan(centroids=centroids, header=header)
+            scan = Scan(centroids=buff, header=header)
         
         # parse data as profile
-        elif data_type == 'profile':
+        elif data_type == PROFILE:
             scan = Scan(profile=points, header=header)
         
         # unknown data type
         else:
-            message = "Unknown data type specified! --> '%s'" % data_type
+            message = "Unknown data type specified! -> '%s'" % data_type
             raise ValueError(message)
         
         return scan
@@ -325,9 +322,9 @@ class MZDataReader(MSReader):
                 if acqSpecification_elm is not None:
                     attr = acqSpecification_elm.get('spectrumType', None)
                     if attr == 'discrete':
-                        scan_data['spectrum_type'] = 'centroided'
+                        scan_data['spectrum_type'] = CENTROIDS
                     elif attr == 'continuous':
-                        scan_data['spectrum_type'] = 'profile'
+                        scan_data['spectrum_type'] = PROFILE
                 
                 # retrieve scan info
                 spectrumInstrument_elm = spectrumSettings_elm.find(self._prefix+'spectrumInstrument')
@@ -377,7 +374,7 @@ class MZDataReader(MSReader):
             if data_elm is not None:
                 scan_data['points_count'] = int(data_elm.get('length', 0))
                 scan_data['mz_data'] = data_elm.text
-                scan_data['mz_endian'] = data_elm.get('endian','network')
+                scan_data['mz_endian'] = data_elm.get('endian', 'network')
                 scan_data['mz_precision'] = int(data_elm.get('precision', 32))
         
         # retrieve intensity array
@@ -387,7 +384,7 @@ class MZDataReader(MSReader):
             if data_elm is not None:
                 scan_data['points_count'] = int(data_elm.get('length', 0))
                 scan_data['int_data'] = data_elm.text
-                scan_data['int_endian'] = data_elm.get('endian','network')
+                scan_data['int_endian'] = data_elm.get('endian', 'network')
                 scan_data['int_precision'] = int(data_elm.get('precision', 32))
     
     
@@ -404,11 +401,11 @@ class MZDataReader(MSReader):
             
             # positive scan
             if accession == 'PSI:1000037' and value == 'Positive':
-                return 'polarity', 1
+                return 'polarity', POSITIVE
             
             # negative scan
             if accession == 'PSI:1000037' and value == 'Negative':
-                return 'polarity', -1
+                return 'polarity', NEGATIVE
             
             # retention time in minutes
             if accession == 'PSI:1000038' and value:
@@ -433,7 +430,7 @@ class MZDataReader(MSReader):
             if accession == 'PSI:1000044' and value:
                 return 'dissociation_method', value
         
-        return (None, None)
+        return None, None
     
     
     def _parse_points(self, scan_data):
@@ -470,15 +467,15 @@ class MZDataReader(MSReader):
             int_precision = 'd'
         
         # convert from binary
-        count = len(mz_data) // struct.calcsize(mz_endian + mz_precision)
+        count = int(len(mz_data) / struct.calcsize(mz_endian + mz_precision))
         mz_data = struct.unpack(mz_endian + mz_precision * count, mz_data[0:len(mz_data)])
         
-        count = len(int_data) // struct.calcsize(int_endian + int_precision)
+        count = int(len(int_data) / struct.calcsize(int_endian + int_precision))
         int_data = struct.unpack(int_endian + int_precision * count, int_data[0:len(int_data)])
         
         # format
-        if scan_data['spectrum_type'] == 'centroided':
-            points = map(list, zip(mz_data, int_data))
+        if scan_data['spectrum_type'] == CENTROIDS:
+            points = list(map(list, zip(mz_data, int_data)))
         else:
             mz_data = numpy.array(mz_data)
             mz_data.shape = (-1, 1)
