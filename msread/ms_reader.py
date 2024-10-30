@@ -1,5 +1,5 @@
 #  Created by Martin Strohalm
-#  Copyright (c) 2010-2019 Martin Strohalm. All rights reserved.
+#  Copyright (c) Martin Strohalm. All rights reserved.
 
 # import modules
 import os.path
@@ -7,6 +7,7 @@ from .centroid import Centroid
 from .masslist import Masslist
 from .header import ScanHeader
 from .scan import Scan
+from .constants import *
 
 
 class MSReader(object):
@@ -28,11 +29,9 @@ class MSReader(object):
                 Path of the spectrum file to be loaded.
         """
         
-        super(MSReader, self).__init__()
-        
         # check path
         if not os.path.exists(path):
-            message = "File not found! --> '%s'" % path
+            message = "File not found! -> '%s'" % path
             raise IOError(message)
         
         # set path
@@ -89,7 +88,7 @@ class MSReader(object):
                 MS scan header.
         """
         
-        message = "The 'headers(self)' method is not implemented for this class. --> %s" % self.__class__.__name__
+        message = "The 'headers(self)' method is not implemented for this class. -> %s" % self.__class__.__name__
         raise NotImplementedError(message)
     
     
@@ -105,7 +104,7 @@ class MSReader(object):
                 MS scan.
         """
         
-        message = "The 'scans(self)' method is not implemented for this class. --> %s" % self.__class__.__name__
+        message = "The 'scans(self, data_type)' method is not implemented for this class. -> %s" % self.__class__.__name__
         raise NotImplementedError(message)
     
     
@@ -128,7 +127,7 @@ class MSReader(object):
                 MS scan.
         """
         
-        message = "The 'scan(self, scan_number, data_type)' method is not implemented for this class. --> %s" % self.__class__.__name__
+        message = "The 'scan(self, scan_number, data_type)' method is not implemented for this class. -> %s" % self.__class__.__name__
         raise NotImplementedError(message)
     
     
@@ -160,27 +159,27 @@ class MSReader(object):
         headers = list(self.headers())
         
         # get instrument names
-        names = set(x.instrument_name for x in headers if x.instrument_name is not None)
+        names = set(h.instrument_name for h in headers if h.instrument_name is not None)
         if names:
             summary['instrument_name'] = "; ".join(names)
         
         # get instrument models
-        models = set(x.instrument_model for x in headers if x.instrument_model is not None)
+        models = set(h.instrument_model for h in headers if h.instrument_model is not None)
         if models:
             summary['instrument_model'] = "; ".join(models)
         
         # get scan numbers
-        numbers = [x.scan_number for x in headers]
+        numbers = [h.scan_number for h in headers]
         summary['scan_number_min'] = min(numbers)
         summary['scan_number_max'] = max(numbers)
         
         # get RT range
-        times = [x.retention_time for x in headers]
+        times = [h.retention_time for h in headers]
         summary['rt_min'] = min(times)
         summary['rt_max'] = max(times)
         
         # init MS level info
-        levels = set(x.ms_level for x in headers)
+        levels = set(h.ms_level for h in headers)
         for level in levels:
             summary['ms_levels'][level] = {
                 'scan_counts': 0,
@@ -190,15 +189,14 @@ class MSReader(object):
                 'polarities': set(),
                 'resolutions': set(),
                 'dissociation_methods': set(),
-                'activation_energies': set(),
-            }
+                'activation_energies': set()}
         
         # get MS level info
         for x in headers:
             summary['ms_levels'][x.ms_level]['scan_counts'] += 1
             summary['ms_levels'][x.ms_level]['mass_analyzers'].add(x.mass_analyzer)
-            summary['ms_levels'][x.ms_level]['mass_ranges'].add((x.low_mz ,x.high_mz))
-            summary['ms_levels'][x.ms_level]['polarities'].add({1:'+', -1:'-', None:None}[x.polarity])
+            summary['ms_levels'][x.ms_level]['mass_ranges'].add((x.low_mz, x.high_mz))
+            summary['ms_levels'][x.ms_level]['polarities'].add({POSITIVE: '+', NEGATIVE: '-', None: None}[x.polarity])
             summary['ms_levels'][x.ms_level]['resolutions'].add(x.resolution)
             summary['ms_levels'][x.ms_level]['dissociation_methods'].add(x.dissociation_method)
             summary['ms_levels'][x.ms_level]['activation_energies'].add(x.activation_energy)
