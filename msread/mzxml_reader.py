@@ -110,6 +110,62 @@ class MZXMLReader(MSReader):
                 yield self._make_header(scan_data)
     
     
+    def header(self, scan_number, **kwargs):
+        """
+        Retrieves specified scan header from document.
+        
+        Args:
+            scan_number: int or None
+                Specifies the scan number of the header to be retrieved. If not
+                provided or set to None, first header is returned. The None value
+                is typically used for files containing just one scan without
+                specific scan number assigned.
+        
+        Returns:
+            msread.ScanHeader
+                MS scan header.
+        """
+        
+        # clear scan hierarchy
+        self._scan_hierarchy = []
+        
+        # iterate through file
+        for evt, elm in etree.iterparse(self.path, ('start', 'end')):
+            
+            # retrieve data type
+            if elm.tag == self._prefix+'dataProcessing' and evt == 'start':
+                self._retrieve_spectrum_type(elm)
+            
+            # process spectrum data
+            if elm.tag == self._prefix+'scan':
+                
+                # get current scan number
+                current_scan_number = elm.get('num', None)
+                
+                # retain scan hierarchy
+                if evt == 'start':
+                    self._scan_hierarchy.append(current_scan_number)
+                    continue
+                else:
+                    del self._scan_hierarchy[-1]
+                
+                # check scan number
+                if scan_number is not None and current_scan_number and scan_number != int(current_scan_number):
+                    continue
+                
+                # init scan data container
+                scan_data = self._make_template()
+                
+                # retrieve raw header data
+                self._retrieve_header_data(elm, scan_data)
+                
+                # free memory
+                elm.clear()
+                
+                # create scan
+                return self._make_header(scan_data)
+    
+    
     def scans(self, min_rt=None, max_rt=None, ms_level=None, polarity=None, data_type=CENTROIDS, **kwargs):
         """
         Iterates through all available scans within document.

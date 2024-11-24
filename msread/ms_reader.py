@@ -92,6 +92,25 @@ class MSReader(object):
         raise NotImplementedError(message)
     
     
+    def header(self, scan_number, **kwargs):
+        """
+        Retrieves specified scan header from document.
+        
+        Args:
+            scan_number: int or None
+                Specifies the scan number of the header to be retrieved. If not
+                provided or set to None, first header is returned. The None value
+                is typically used for files containing just one scan without
+                specific scan number assigned.
+        
+        Returns:
+            msread.ScanHeader
+                MS scan header.
+        """
+        
+        return self.scan(scan_number, **kwargs).header
+    
+    
     def scans(self, **kwargs):
         """
         Iterates through all available scans within document.

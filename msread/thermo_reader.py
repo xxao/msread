@@ -148,6 +148,48 @@ class ThermoReader(MSReader):
         if should_close:
             self.close()
     
+    def header(self, scan_number, **kwargs):
+        """
+        Retrieves specified scan header from document.
+        
+        Args:
+            scan_number: int or None
+                Specifies the scan number of the header to be retrieved. If not
+                provided or set to None, first header is returned. The None value
+                is typically used for files containing just one scan without
+                specific scan number assigned.
+        
+        Returns:
+            msread.ScanHeader
+                MS scan header.
+        """
+        
+        # open file if necessary
+        should_close = self.open()
+        
+        # set current controller to MS
+        self._raw_reader.SetCurrentController(0, 1)
+        
+        # check scan number
+        if scan_number is None:
+            scan_number = 1
+        
+        # init scan data container
+        scan_data = self._make_template()
+        scan_data['scan_number'] = scan_number
+        
+        # retrieve raw header data
+        self._retrieve_header_data(scan_data, scan_number)
+        
+        # create header
+        header = self._make_header(scan_data)
+        
+        # close file
+        if should_close:
+            self.close()
+        
+        return header
+    
     
     def scans(self, min_rt=None, max_rt=None, ms_level=None, polarity=None, profile=True, **kwargs):
         """
@@ -468,8 +510,8 @@ class ThermoReader(MSReader):
         ms_level = scan_data['ms_level']
         
         # check ms level
-        if ms_level < 2:
-           return
+        if not ms_level or ms_level < 2:
+            return
         
         # get all precursor data
         self._retrieve_precursor_info(scan_data)
@@ -563,7 +605,7 @@ class ThermoReader(MSReader):
         precursor_mz = scan_data['precursor_mz']
         
         # check ms level
-        if ms_level < 2:
+        if not ms_level or ms_level < 2:
             return
         
         # try trailer

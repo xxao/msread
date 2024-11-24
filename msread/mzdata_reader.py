@@ -90,6 +90,47 @@ class MZDataReader(MSReader):
                 yield self._make_header(scan_data)
     
     
+    def header(self, scan_number, **kwargs):
+        """
+        Retrieves specified scan header from document.
+        
+        Args:
+            scan_number: int or None
+                Specifies the scan number of the header to be retrieved. If not
+                provided or set to None, first header is returned. The None value
+                is typically used for files containing just one scan without
+                specific scan number assigned.
+        
+        Returns:
+            msread.ScanHeader
+                MS scan header.
+        """
+        
+        # iterate through file
+        for evt, elm in etree.iterparse(self.path, ('end',)):
+            
+            # process spectrum data
+            if elm.tag == self._prefix+'spectrum':
+                
+                # check scan number
+                if scan_number is not None:
+                    attr = elm.get('id', None)
+                    if attr and scan_number != int(attr):
+                        continue
+                
+                # init scan data container
+                scan_data = self._make_template()
+                
+                # retrieve raw header data
+                self._retrieve_header_data(elm, scan_data)
+                
+                # free memory
+                elm.clear()
+                
+                # create scan
+                return self._make_header(scan_data)
+    
+    
     def scans(self, min_rt=None, max_rt=None, ms_level=None, polarity=None, data_type=CENTROIDS, **kwargs):
         """
         Iterates through all available scans within document.
