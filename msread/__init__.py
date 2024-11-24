@@ -43,6 +43,9 @@ def read(path, file_format=None):
             Initialized reader for specific file format.
     """
     
+    # remove whitespace
+    path = path.strip()
+    
     # check path
     if not os.path.exists(path):
         message = "File not found! -> '%s'" % path
