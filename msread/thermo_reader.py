@@ -101,9 +101,6 @@ class ThermoReader(MSReader):
             max_rt: float or None
                 Maximum retention time in seconds.
             
-            max_rt: float or None
-                Maximum retention time in seconds.
-            
             ms_level: int or None
                 Specific MS level.
             
@@ -198,9 +195,6 @@ class ThermoReader(MSReader):
         Args:
             min_rt: float or None
                 Minimum retention time in seconds.
-            
-            max_rt: float or None
-                Maximum retention time in seconds.
             
             max_rt: float or None
                 Maximum retention time in seconds.
