@@ -622,7 +622,7 @@ class ThermoReader(MSReader):
         
         # try nearest MSn-1
         if master_scan_number is None:
-            master_scan_number = self._retrieve_parent_scan_number_by_ms_level(scan_number, master_scan_number, precursor_mz)
+            master_scan_number = self._retrieve_parent_scan_number_by_ms_level(scan_number, master_ms_level, precursor_mz)
         
         # set master scan number
         scan_data['parent_scan_number'] = master_scan_number
