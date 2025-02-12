@@ -131,12 +131,12 @@ class ThermoReader(MSReader):
             scan_data = self._make_template()
             scan_data['scan_number'] = i
             
-            # retrieve raw header data
-            self._retrieve_header_data(scan_data, i)
-            
-            # check raw header data
+            # pre-check scan data
             if not self._check_header_data(scan_data, min_rt, max_rt, ms_level, polarity):
                 continue
+            
+            # retrieve raw header data
+            self._retrieve_header_data(scan_data, i)
             
             # create scan header
             yield self._make_header(scan_data)
@@ -233,12 +233,12 @@ class ThermoReader(MSReader):
             scan_data = self._make_template()
             scan_data['scan_number'] = i
             
-            # retrieve raw header data
-            self._retrieve_header_data(scan_data, i)
-            
-            # check raw header data
+            # pre-check scan data
             if not self._check_header_data(scan_data, min_rt, max_rt, ms_level, polarity):
                 continue
+            
+            # retrieve raw header data
+            self._retrieve_header_data(scan_data, i)
             
             # retrieve raw spectrum data
             self._retrieve_spectrum_data(scan_data, i, profile)
@@ -399,19 +399,30 @@ class ThermoReader(MSReader):
     
     
     def _check_header_data(self, scan_data, min_rt=None, max_rt=None, ms_level=None, polarity=None):
-        """Checks whether scan header passes filter criteria."""
+        """Checks whether scan  passes filter criteria."""
         
-        if min_rt is not None and scan_data['retention_time'] < min_rt:
-            return False
+        # get scan number
+        scan_number = scan_data['scan_number']
         
-        if max_rt is not None and scan_data['retention_time'] > max_rt:
-            return False
+        # check MS level
+        if ms_level is not None:
+            ret_ms_level = self._retrieve_ms_level(scan_number)
+            if ret_ms_level and ret_ms_level != ms_level:
+                return False
         
-        if ms_level is not None and scan_data['ms_level'] != ms_level:
-            return False
+        # check polarity
+        if polarity is not None:
+            ret_polarity = self._retrieve_polarity(scan_number)
+            if ret_polarity and ret_polarity != polarity:
+                return False
         
-        if polarity is not None and scan_data['polarity'] != polarity:
-            return False
+        # check retention time
+        if min_rt is not None or max_rt is not None:
+            self._retrieve_scan_header_info(scan_data)
+            if min_rt is not None and scan_data['retention_time'] < min_rt:
+                return False
+            if max_rt is not None and scan_data['retention_time'] > max_rt:
+                return False
         
         return True
     
