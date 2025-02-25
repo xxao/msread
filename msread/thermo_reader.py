@@ -21,7 +21,7 @@ SCAN_FILTER_DISSOCIATION_PATTERN = re.compile('(([0-9\.]+)@([a-z]+)([0-9\.]+))')
 STEPPED_ENERGIES = re.compile('(?P<activation>\w+) Collision Energies \(%\) = (?P<values>[\d,]+)')
 
 # set enums
-ANALYZERS = ('ITMS', 'TQMS', 'SQMS', 'TOFMS', 'FTMS', 'Sector')
+ANALYZERS = ('ITMS', 'TQMS', 'SQMS', 'TOFMS', 'FTMS', 'Sector', 'Unknown', 'Astral')
 DISSOCIATION_METHODS = ('CID', 'MPD', 'ECD', 'PQD', 'ETD', 'HCD', 'Any', 'SA', 'PTR', 'NETD', 'NPTR', 'Unknown')
 
 # define constants
@@ -79,7 +79,7 @@ class ThermoReader(MSReader):
         self._raw_reader.open(self.path)
         self._is_opened = True
         
-        return True 
+        return True
     
     
     def close(self):
@@ -144,6 +144,7 @@ class ThermoReader(MSReader):
         # close file
         if should_close:
             self.close()
+    
     
     def header(self, scan_number, **kwargs):
         """
@@ -625,9 +626,13 @@ class ThermoReader(MSReader):
             if event_index and master_event_index:
                 master_scan_number = self._retrieve_parent_scan_number_by_event_index(scan_number, master_event_index, precursor_mz)
         
-        # try nearest MSn-1
+        # try nearest previous MSn-1
         if master_scan_number is None:
-            master_scan_number = self._retrieve_parent_scan_number_by_ms_level(scan_number, master_ms_level, precursor_mz)
+            master_scan_number = self._retrieve_parent_scan_number_by_ms_level(scan_number, master_ms_level, precursor_mz, -1)
+        
+        # try nearest next MSn-1
+        if master_scan_number is None:
+            master_scan_number = self._retrieve_parent_scan_number_by_ms_level(scan_number, master_ms_level, precursor_mz, 1)
         
         # set master scan number
         scan_data['parent_scan_number'] = master_scan_number
@@ -701,30 +706,42 @@ class ThermoReader(MSReader):
             current_scan -= 1
     
     
-    def _retrieve_parent_scan_number_by_ms_level(self, scan_number, ms_level, precursor_mz):
+    def _retrieve_parent_scan_number_by_ms_level(self, scan_number, ms_level, precursor_mz, direction):
         """Retrieves parent scan number by nearest master MS level."""
         
         # try cache
         if scan_number in self._master_scan_numbers:
             return self._master_scan_numbers[scan_number]
         
-        # use nearest MS1 (for MSn=2)
-        current_scan = scan_number - 1
-        while current_scan:
+        # get more info
+        cycle = self._retrieve_scan_cycle(scan_number)
+        is_dia = self._inst_methods and "DIAScan" in self._inst_methods
+        
+        # set candidate
+        candidate_scan = scan_number + direction
+        
+        # use nearest MS(n-1)
+        while candidate_scan:
+            
+            # check scan cycle
+            if self._retrieve_scan_cycle(candidate_scan) != cycle:
+                break
             
             # check ms level
-            if self._retrieve_ms_level(current_scan) != ms_level:
-                current_scan -= 1
+            if self._retrieve_ms_level(candidate_scan) != ms_level:
+                candidate_scan += direction
                 continue
             
             # get mass range
-            low_mz, high_mz = self._retrieve_mass_range(current_scan)
+            low_mz, high_mz = self._retrieve_mass_range(candidate_scan)
             
             # check mass range
-            if not precursor_mz or (low_mz <= precursor_mz <= high_mz):
-                return current_scan
+            if not precursor_mz or (low_mz <= precursor_mz <= high_mz) or is_dia:
+                return candidate_scan
             
-            current_scan -= 1
+            candidate_scan += direction
+        
+        return None
     
     
     def _retrieve_profile(self, scan_number):
@@ -1085,7 +1102,7 @@ class ThermoReader(MSReader):
         
         # check if instrument method needed
         if '...' in raw_value and self._inst_methods:
-            for match in STEPPED_ENERGIES.findall(self._inst_methods[0]):
+            for match in STEPPED_ENERGIES.findall("; ".join(self._inst_methods)):
                 if match[0] == method:
                     raw_value = match[1]
                     break
@@ -1105,6 +1122,17 @@ class ThermoReader(MSReader):
         index_v = comtypes.automation.VARIANT()
         if not self._raw_reader.GetTrailerExtraValueForScanNum(scan_number, 'Scan Event:', index_v):
             return int(index_v.value)
+        
+        return None
+    
+    
+    def _retrieve_scan_cycle(self, scan_number):
+        """Retrieves scan cycle."""
+        
+        # get value
+        cycle_l = ctypes.c_long()
+        if not self._raw_reader.GetCycleNumberFromScanNumber(scan_number, cycle_l):
+            return int(cycle_l.value)
         
         return None
     

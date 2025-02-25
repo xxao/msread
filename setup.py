@@ -17,7 +17,7 @@ classifiers = [
 # main setup
 setup(
     name = 'msread',
-    version = "0.8.0",
+    version = "0.9.0",
     description = 'Mass spectrometry data reading library',
     url = 'https://github.com/xxao/msread',
     author = 'Martin Strohalm',
