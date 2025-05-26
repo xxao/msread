@@ -2,7 +2,7 @@
 #  Copyright (c) Martin Strohalm. All rights reserved.
 
 # set version
-version = (0, 9, 0)
+version = (0, 10, 0)
 
 # import modules
 import os.path
