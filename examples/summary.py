@@ -13,10 +13,10 @@ with msread.read(path) as reader:
     reader.summary(show=True)
     
     # read headers only
-    for header in reader.headers(min_rt=5*60, max_rt=10*60, ms_level=1):
+    for header in reader.headers(min_rt=5.0*60, max_rt=5.1*60, ms_level=1):
         print(header)
     
     # read scans
-    for scan in reader.scans(min_rt=5*60, max_rt=10*60, ms_level=1):
+    for scan in reader.scans(min_rt=5.0*60, max_rt=5.1*60, ms_level=1):
         print(scan.header)
-        print(scan.centroids)
+        print(max(scan.centroids, key=lambda d: d.mz))

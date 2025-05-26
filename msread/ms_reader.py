@@ -165,6 +165,7 @@ class MSReader(object):
         
         # init summary
         summary = {
+            'acquisition_date': None,
             'instrument_name': None,
             'instrument_model': None,
             'scan_number_min': None,
@@ -176,6 +177,11 @@ class MSReader(object):
         
         # get all headers
         headers = list(self.headers())
+        
+        # get acquisition date
+        dates = set(str(h.acquisition_date) for h in headers if h.acquisition_date is not None)
+        if dates:
+            summary['acquisition_date'] = "; ".join(dates)
         
         # get instrument names
         names = set(h.instrument_name for h in headers if h.instrument_name is not None)
@@ -233,6 +239,7 @@ class MSReader(object):
         # show summary
         if show:
             
+            print("Acquisition: %s" % summary['acquisition_date'])
             print("Instrument: %s | %s" % (summary['instrument_name'], summary['instrument_model']))
             print("RT Range: %.2f - %.2f [min]" % (summary['rt_min']/60.0, summary['rt_max']/60.0))
             print("Scan Range: %d - %d" % (summary['scan_number_min'], summary['scan_number_max']))

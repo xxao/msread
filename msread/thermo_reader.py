@@ -5,6 +5,7 @@
 import re
 import numpy
 import ctypes
+import datetime
 
 try:
     import comtypes
@@ -68,7 +69,7 @@ class ThermoReader(MSReader):
         Opens the file.
         
         Returns:
-            state: bool
+            bool
                 Returns True if the file is newly opened. False if the file was
                 already open.
         """
@@ -308,6 +309,7 @@ class ThermoReader(MSReader):
         return {
             'scan_number': None,
             'parent_scan_number': None,
+            'acquisition_date': None,
             'instrument_name': None,
             'instrument_model': None,
             'ms_level': None,
@@ -436,6 +438,11 @@ class ThermoReader(MSReader):
             self._retrieve_instrument_methods()
             scan_data['instrument_methods'] = self._inst_methods
         
+        # retrieve acquisition date
+        acquisition_date = self._retrieve_acquisition_date()
+        if acquisition_date is not None:
+            scan_data['acquisition_date'] = acquisition_date
+        
         # retrieve instrument name
         instrument_name = self._retrieve_instrument_name()
         if instrument_name is not None:
@@ -493,7 +500,7 @@ class ThermoReader(MSReader):
         # get spectrum type
         is_profile_l = ctypes.c_long()
         if self._raw_reader.IsProfileScanForScanNum(scan_number, is_profile_l):
-           return
+            return
         
         # get polarity
         polarity = scan_data['polarity']
@@ -704,6 +711,8 @@ class ThermoReader(MSReader):
             
             lowest_reached = current_event_index <= 1
             current_scan -= 1
+        
+        return None
     
     
     def _retrieve_parent_scan_number_by_ms_level(self, scan_number, ms_level, precursor_mz, direction):
@@ -755,12 +764,12 @@ class ThermoReader(MSReader):
         
         error = self._raw_reader.GetMassListFromScanNum(
             scan_number_l,
-            comtypes.BSTR(''), # filter
-            ctypes.c_long(0), # intensity cut-off mode
-            ctypes.c_long(0), # intensity cut-off value
-            ctypes.c_long(0), # max num of peaks
-            ctypes.c_long(0), # centroid result
-            ctypes.c_double(0), # centroid peak width
+            comtypes.BSTR(''),  # filter
+            ctypes.c_long(0),  # intensity cut-off mode
+            ctypes.c_long(0),  # intensity cut-off value
+            ctypes.c_long(0),  # max num of peaks
+            ctypes.c_long(0),  # centroid result
+            ctypes.c_double(0),  # centroid peak width
             mass_list_v,
             flags_v,
             size_l)
@@ -830,12 +839,12 @@ class ThermoReader(MSReader):
         
         error = self._raw_reader.GetMassListFromScanNum(
             scan_number_l,
-            comtypes.BSTR(''), # filter
-            ctypes.c_long(0), # intensity cut-off mode
-            ctypes.c_long(0), # intensity cut-off value
-            ctypes.c_long(0), # max num of peaks
-            ctypes.c_long(0), # centroided result
-            ctypes.c_double(0), # centroid peak width
+            comtypes.BSTR(''),  # filter
+            ctypes.c_long(0),  # intensity cut-off mode
+            ctypes.c_long(0),  # intensity cut-off value
+            ctypes.c_long(0),  # max num of peaks
+            ctypes.c_long(0),  # centroided result
+            ctypes.c_double(0),  # centroid peak width
             mass_list_v,
             flags_v,
             size_l)
@@ -854,6 +863,17 @@ class ThermoReader(MSReader):
                 centroids.append(Centroid(mz_array[i], ai_array[i]))
         
         return centroids
+    
+    
+    def _retrieve_acquisition_date(self):
+        """Retrieves acquisition date value."""
+        
+        # get acquisition date
+        acquisition_date_d = comtypes.c_double()
+        if not self._raw_reader.GetCreationDate(acquisition_date_d):
+            return datetime.datetime(1899, 12, 30) + datetime.timedelta(days=acquisition_date_d.value)
+        
+        return None
     
     
     def _retrieve_instrument_name(self):

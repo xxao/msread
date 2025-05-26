@@ -14,6 +14,9 @@ class ScanHeader(object):
         parent_scan_number: int or None
             Scan number of the parent spectrum.
         
+        acquisition_date: datetime or None
+            Acquisition date.
+        
         instrument_name: str or None
             Instrument name.
         
@@ -99,6 +102,7 @@ class ScanHeader(object):
         self.scan_number = None
         self.parent_scan_number = None
         
+        self.acquisition_date = None
         self.instrument_name = None
         self.instrument_model = None
         
@@ -157,7 +161,7 @@ class ScanHeader(object):
             label += " (+)"
         elif self.polarity == -1:
             label += " (-)"
-            
+        
         if self.retention_time is not None:
             label += " RT:%.3f min" % (self.retention_time / 60)
         
@@ -205,6 +209,7 @@ class ScanHeader(object):
         
         return (self.scan_number == other.scan_number
                 and self.parent_scan_number == other.parent_scan_number
+                and self.acquisition_date == other.acquisition_date
                 and self.instrument_name == other.instrument_name
                 and self.instrument_model == other.instrument_model
                 and self.title == other.title
